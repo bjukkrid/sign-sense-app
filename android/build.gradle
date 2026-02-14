@@ -1,0 +1,56 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    ext {
+        buildToolsVersion = "35.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 35
+        targetSdkVersion = 35
+        ndkVersion = "26.1.10909125"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath('com.android.tools.build:gradle')
+        classpath('com.facebook.react:react-native-gradle-plugin')
+        classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+    }
+}
+
+if (Os.isFamily(Os.FAMILY_MAC)) {
+    def nvmNode = System.getenv("NVM_BIN")
+    if (nvmNode != null) {
+        nvmNode += "/node"
+    }
+    def brewNode = "/opt/homebrew/bin/node" // For Apple Silicon
+    def localNode = "/usr/local/bin/node" // For Intel Macs with Homebrew
+
+    def nodeExecutable = "node" // Default
+
+    if (nvmNode != null && new File(nvmNode).exists()) {
+        nodeExecutable = nvmNode
+    } else if (new File(brewNode).exists()) {
+        nodeExecutable = brewNode
+    } else if (new File(localNode).exists()) {
+        nodeExecutable = localNode
+    }
+
+    project.ext.react = [
+        nodeExecutableAndArgs: [nodeExecutable]
+    ]
+}
+
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"

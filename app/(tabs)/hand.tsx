@@ -81,7 +81,84 @@ export default function HandScreen() {
       result &&
       (result.hands?.length > 0 || (Array.isArray(result) && result.length > 0))
     ) {
-      setDetectedHands(result.hands || result);
+      const handsData: DetectedHand[] = result.hands || result;
+
+      // Transform data to match json2socket.json structure
+      const transformedData = {
+        v: 1,
+        frame_id: frameCount + 1, // Simple incremental frame ID
+        ts_ms: Date.now(),
+        hand_positions: handsData.reduce(
+          (acc, hand, index) => {
+            const handKey =
+              hand.handedness === "Left" ? "Right_hand" : "Left_hand"; // Mirroring for selfie camera if needed, or keep as is. usually camera flips.
+            // Note: MediaPipe often returns "Left" for your actual Right hand in selfie mode.
+            // Let's assume standard behavior:
+            // If the model says "Left", it means it sees a left hand structure.
+            // You might need to adjust logic based on your specific camera mirror settings.
+
+            const landmarksObj: Record<string, any> = {};
+
+            // Map index to name based on MediaPipe Hands landmark indices
+            // 0: WRIST
+            // 1-4: THUMB
+            // 5-8: INDEX
+            // 9-12: MIDDLE
+            // 13-16: RING
+            // 17-20: PINKY
+            const LANDMARK_NAMES = [
+              "WRIST",
+              "THUMB_CMC",
+              "THUMB_MCP",
+              "THUMB_IP",
+              "THUMB_TIP",
+              "INDEX_FINGER_MCP",
+              "INDEX_FINGER_PIP",
+              "INDEX_FINGER_DIP",
+              "INDEX_FINGER_TIP",
+              "MIDDLE_FINGER_MCP",
+              "MIDDLE_FINGER_PIP",
+              "MIDDLE_FINGER_DIP",
+              "MIDDLE_FINGER_TIP",
+              "RING_FINGER_MCP",
+              "RING_FINGER_PIP",
+              "RING_FINGER_DIP",
+              "RING_FINGER_TIP",
+              "PINKY_MCP",
+              "PINKY_PIP",
+              "PINKY_DIP",
+              "PINKY_TIP",
+            ];
+
+            hand.landmarks.forEach((l, i) => {
+              if (i < LANDMARK_NAMES.length) {
+                const name = LANDMARK_NAMES[i];
+                landmarksObj[name] = {
+                  index: i,
+                  x: l.x,
+                  y: l.y,
+                  z: l.z,
+                  visibility: 1, // MediaPipe Hands usually implies visibility 1 if detected
+                };
+              }
+            });
+
+            acc[handKey] = {
+              landmarks: landmarksObj,
+              handedness_score: hand.confidence,
+              hand_index: index,
+              // palm_size: calculatePalmSize(hand.landmarks) // Optional: implement if needed
+            };
+            return acc;
+          },
+          {} as Record<string, any>,
+        ),
+        // pose_positions: {} // Add pose logic here later if needed
+      };
+
+      // console.log(JSON.stringify(transformedData, null, 2));
+
+      setDetectedHands(handsData);
       setIsDetecting(true);
     } else {
       setDetectedHands([]);
