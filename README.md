@@ -52,10 +52,22 @@
 
 4.  **Run on iOS:**
     This project uses custom native code, so you must use the development build command:
+
     ```bash
     npx expo run:ios
     ```
+
     _(Note: allow `npx expo start --dev-client` for subsequent runs if native code hasn't changed)_
+
+5.  **Run on iOS Fail:**
+    When run on iOS fail:
+    ```bash
+    cd ios
+    rm -rf Pods Podfile.lock build  # Clear cache all
+    pod install
+    cd ..
+    npx expo run:ios
+    ```
 
 ## 📱 Project Structure
 

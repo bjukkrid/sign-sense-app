@@ -8,7 +8,7 @@
  */
 
 import { useIsFocused } from "@react-navigation/native";
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
 import {
   Camera,
@@ -156,7 +156,7 @@ export default function HandScreen() {
         // pose_positions: {} // Add pose logic here later if needed
       };
 
-      // console.log(JSON.stringify(transformedData, null, 2));
+      console.log(JSON.stringify(transformedData, null, 2));
 
       setDetectedHands(handsData);
       setIsDetecting(true);
