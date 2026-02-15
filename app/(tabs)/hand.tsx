@@ -1,12 +1,3 @@
-/**
- * Hand Detection Screen
- *
- * 🔒 Locked Calibration:
- * - Rotation: 270°
- * - ResizeMode: contain
- * - Flip X/Y: OFF
- */
-
 import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
@@ -31,7 +22,18 @@ function detectHands(frame: Frame) {
   if (plugin == null) {
     return null;
   }
-  return plugin.call(frame);
+
+  try {
+    const result: any = plugin.call(frame);
+    if (result && result.hands && result.hands.length > 0) {
+      // Log data structure periodically (e.g. 1 in 30 frames) to avoid spam
+    } else if (result && result.error) {
+    }
+    return result;
+  } catch (error) {
+    console.log("❌ [Hand] Error calling plugin:", error);
+    return null;
+  }
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -92,10 +94,6 @@ export default function HandScreen() {
           (acc, hand, index) => {
             const handKey =
               hand.handedness === "Left" ? "Right_hand" : "Left_hand"; // Mirroring for selfie camera if needed, or keep as is. usually camera flips.
-            // Note: MediaPipe often returns "Left" for your actual Right hand in selfie mode.
-            // Let's assume standard behavior:
-            // If the model says "Left", it means it sees a left hand structure.
-            // You might need to adjust logic based on your specific camera mirror settings.
 
             const landmarksObj: Record<string, any> = {};
 
@@ -156,8 +154,6 @@ export default function HandScreen() {
         // pose_positions: {} // Add pose logic here later if needed
       };
 
-      console.log(JSON.stringify(transformedData, null, 2));
-
       setDetectedHands(handsData);
       setIsDetecting(true);
     } else {
@@ -186,12 +182,30 @@ export default function HandScreen() {
   };
 
   /**
-   * 📐 Locked Transform Logic (270°)
+   * 📐 Callibrated Logic
+   * - iOS: Rotation 90°, Flip OFF (Matches Landscape/Portrait behavior)
+   * - Android: Rotation 270°, Flip OFF (Matches typical Front Camera behavior)
    */
   const transformPoint = (x: number, y: number) => {
-    // Rotation 270° Logic:
-    const tx = 1 - y;
-    const ty = x;
+    let tx = x;
+    let ty = y;
+
+    if (Platform.OS === "ios") {
+      // 1. iOS: Rotation 90 degrees Clockwise
+      // (x, y) -> (1-y, x)
+      tx = 1 - y;
+      ty = x;
+      // 2. iOS Flip: OFF
+    } else {
+      // 1. Android: Rotation 270 degrees Clockwise (Standard for Front Camera)
+      // (x, y) -> (y, 1-x)
+      tx = y;
+      ty = 1 - x;
+
+      // 2. Android Flip: ON (Horizontal Mirror)
+      // (tx, ty) -> (1-tx, ty)
+      tx = 1 - tx;
+    }
 
     return {
       x: tx * SCREEN_WIDTH,
@@ -215,8 +229,8 @@ export default function HandScreen() {
         isActive={isFocused} // Only active when focused
         style={[styles.camera, { height: cameraHeight }]}
         frameProcessor={frameProcessor}
-        pixelFormat="rgb"
-        resizeMode="contain" // Locked to contain
+        pixelFormat="rgb" // MediaPipe requires RGB/RGBA
+        resizeMode="contain"
       />
 
       <View
@@ -225,16 +239,20 @@ export default function HandScreen() {
       >
         {detectedHands.map((hand, handIndex) => (
           <View key={handIndex} style={StyleSheet.absoluteFill}>
-            {hand.landmarks?.map((l, i) => {
-              const { x, y } = transformPoint(l.x, l.y);
+            {hand.landmarks?.map((l: any, i: number) => {
+              // Use 'l' directly if it has x,y,z (from our updated interface)
+              // The worklet returns raw objects, make sure to access properties safely
+              const x = l.x ?? 0;
+              const y = l.y ?? 0;
+              const p = transformPoint(x, y);
               return (
                 <View
                   key={i}
                   style={[
                     styles.landmark,
                     {
-                      left: x - 6, // Adjusted center offset (12px size)
-                      top: y - 6,
+                      left: p.x - 6,
+                      top: p.y - 6,
                       backgroundColor: getLandmarkColor(i),
                     },
                   ]}
@@ -255,6 +273,8 @@ export default function HandScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Calibration Controls */}
 
       {/* Info Panel */}
       <View style={styles.statusPanel}>
@@ -334,10 +354,25 @@ const styles = StyleSheet.create({
   },
   dotActive: { backgroundColor: "#10B981" },
   badgeText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
+  controls: {
+    position: "absolute",
+    top: 100,
+    right: 20,
+    zIndex: 30,
+  },
+  controlButton: {
+    backgroundColor: "rgba(0,0,0,0.6)",
+    color: "#FFF",
+    padding: 10,
+    borderRadius: 8,
+    overflow: "hidden",
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
   statusPanel: { position: "absolute", bottom: 40, left: 20, right: 20 },
   infoBox: {
     backgroundColor: "rgba(0,0,0,0.7)",
-    backdropFilter: "blur(10px)", // Works on some platforms, robust fallback
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -360,5 +395,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginTop: 8,
+  },
+  controlText: {
+    color: "#FFF",
+    fontWeight: "600",
+    fontSize: 12,
   },
 });

@@ -25,6 +25,7 @@ class MainApplication : Application(), ReactApplication {
             val packages = PackageList(this).packages
             // Packages that cannot be autolinked yet can be added manually here, for example:
             // packages.add(new MyReactNativePackage());
+            packages.add(HandLandmarkerPackage())
             return packages
           }
 
@@ -47,6 +48,10 @@ class MainApplication : Application(), ReactApplication {
       // If you opted-in for the New Architecture, we load the native entry point for this app.
       load()
     }
+    
+    // Initialize HandLandmarker
+    HandLandmarkerFrameProcessor.initialize(this)
+    
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
 
