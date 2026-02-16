@@ -20,9 +20,7 @@ const plugin = VisionCameraProxy.initFrameProcessorPlugin("detectHands", {
   minPoseTrackingConfidence: 0.5,
 });
 
-/**
- * Wrapper function to call the native frame processor
- */
+// Wrapper function to call the native frame processor
 function detectHands(frame: Frame) {
   "worklet";
   if (plugin == null) {
@@ -44,7 +42,7 @@ function detectHands(frame: Frame) {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// สีสำหรับแต่ละนิ้ว
+// Color finger
 const FINGER_COLORS: Record<string, string> = {
   THUMB: "#FF6B6B",
   INDEX: "#4ECDC4",
@@ -98,7 +96,7 @@ export default function HandScreen() {
         // Transform data to match json2socket.json structure
         const transformedData: any = {
           v: 1,
-          frame_id: frameCount + 1, // Simple incremental frame ID
+          frame_id: frameCount + 1,
           ts_ms: Date.now(),
           hand_positions: handsData.reduce(
             (acc, hand, index) => {
@@ -196,7 +194,7 @@ export default function HandScreen() {
       }
     },
     [frameCount],
-  ); // Added frameCount to dep array just to suppress warning, or remove it from dep if causing performance issue. better to use functional update for frame count.
+  );
 
   const onHandsDetectedWorklet = useRunOnJS(onHandsDetected, [onHandsDetected]);
   const frameProcessor = useFrameProcessor(
@@ -222,37 +220,67 @@ export default function HandScreen() {
    * - iOS: Rotation 90°, Flip OFF (Matches Landscape/Portrait behavior)
    * - Android: Rotation 270°, Flip OFF (Matches typical Front Camera behavior)
    */
+  // Calibration State (Fixed for Android)
+  const [config, setConfig] = useState({
+    swapXY: Platform.OS === "android", // ON
+    flipX: false, // OFF
+    flipY: false, // OFF
+    rotation: Platform.OS === "android" ? 180 : 0, // 180
+  });
+
   const transformPoint = (x: number, y: number) => {
     let tx = x;
     let ty = y;
 
     if (Platform.OS === "ios") {
-      // 1. iOS: Rotation 90 degrees Clockwise
-      // (x, y) -> (1-y, x)
       tx = 1 - y;
       ty = x;
-      // 2. iOS Flip: OFF
     } else {
-      // 1. Android: Rotation 270 degrees Clockwise (Standard for Front Camera)
-      // (x, y) -> (y, 1-x)
-      tx = y;
-      ty = 1 - x;
+      if (config.swapXY) {
+        tx = y;
+        ty = x;
+      }
 
-      // 2. Android Flip: ON (Horizontal Mirror)
-      // (tx, ty) -> (1-tx, ty)
-      tx = 1 - tx;
+      if (config.flipX) {
+        tx = 1 - tx;
+      }
+      if (config.flipY) {
+        ty = 1 - ty;
+      }
+
+      // Manual Rotation (around center 0.5, 0.5)
+      if (config.rotation !== 0) {
+        // Translate to centered coordinates (-0.5 to 0.5)
+        let cx = tx - 0.5;
+        let cy = ty - 0.5;
+
+        let rx = cx;
+        let ry = cy;
+
+        // Rotate
+        const rad = (config.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        rx = cx * cos - cy * sin;
+        ry = cx * sin + cy * cos;
+
+        // Translate back
+        tx = rx + 0.5;
+        ty = ry + 0.5;
+      }
     }
 
     return {
       x: tx * SCREEN_WIDTH,
-      y: ty * (SCREEN_HEIGHT * 0.75), // Match camera height
+      y: ty * (SCREEN_HEIGHT * 0.75),
     };
   };
 
   if (!hasPermission || !device)
     return (
       <View style={styles.container}>
-        <Text style={styles.headerText}>Camera Error</Text>
+        <Text style={styles.headerText}>No Camera</Text>
       </View>
     );
 
@@ -337,13 +365,9 @@ export default function HandScreen() {
         <Text style={styles.headerText}>🤚 Hand Detection</Text>
         <View style={styles.badge}>
           <View style={[styles.dot, isDetecting && styles.dotActive]} />
-          <Text style={styles.badgeText}>
-            {isDetecting ? `${detectedHands.length} Hands` : "Searching..."}
-          </Text>
+          <Text style={styles.badgeText}></Text>
         </View>
       </View>
-
-      {/* Calibration Controls */}
 
       {/* Info Panel */}
       <View style={styles.statusPanel}>
@@ -373,6 +397,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: SCREEN_WIDTH,
+    zIndex: 100,
   },
   landmark: {
     position: "absolute",

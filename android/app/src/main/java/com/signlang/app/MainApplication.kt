@@ -25,7 +25,7 @@ class MainApplication : Application(), ReactApplication {
             val packages = PackageList(this).packages
             // Packages that cannot be autolinked yet can be added manually here, for example:
             // packages.add(new MyReactNativePackage());
-            packages.add(HandLandmarkerPackage())
+            packages.add(SignLangPackage()) // Use our new package
             return packages
           }
 
@@ -49,8 +49,8 @@ class MainApplication : Application(), ReactApplication {
       load()
     }
     
-    // Initialize HandLandmarker
-    HandLandmarkerFrameProcessor.initialize(this)
+    // No manual init needed for VisionCamera plugins usually, 
+    // SignLangPackage registers the plugin in its constructor/init block.
     
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
