@@ -1,5 +1,5 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
 import {
   Camera,
@@ -12,7 +12,13 @@ import {
 import { useRunOnJS } from "react-native-worklets-core";
 
 // Initialize the Frame Processor Plugin
-const plugin = VisionCameraProxy.initFrameProcessorPlugin("detectHands");
+const plugin = VisionCameraProxy.initFrameProcessorPlugin("detectHands", {
+  minHandConfidence: 0.5,
+  minTrackingConfidence: 0.5,
+  minDetectionConfidence: 0.5,
+  minPoseConfidence: 0.5,
+  minPoseTrackingConfidence: 0.5,
+});
 
 /**
  * Wrapper function to call the native frame processor
@@ -68,6 +74,7 @@ export default function HandScreen() {
   const device = useCameraDevice("front");
 
   const [detectedHands, setDetectedHands] = useState<DetectedHand[]>([]);
+  const [detectedPose, setDetectedPose] = useState<any>(null); // State for Pose
   const [frameCount, setFrameCount] = useState(0);
   const [isDetecting, setIsDetecting] = useState(false);
 
@@ -77,90 +84,119 @@ export default function HandScreen() {
     }
   }, [hasPermission, requestPermission]);
 
-  const onHandsDetected = useCallback((result: any) => {
-    setFrameCount((prev) => (prev + 1) % 10000);
-    if (
-      result &&
-      (result.hands?.length > 0 || (Array.isArray(result) && result.length > 0))
-    ) {
-      const handsData: DetectedHand[] = result.hands || result;
+  const onHandsDetected = useCallback(
+    (result: any) => {
+      setFrameCount((prev) => (prev + 1) % 10000);
 
-      // Transform data to match json2socket.json structure
-      const transformedData = {
-        v: 1,
-        frame_id: frameCount + 1, // Simple incremental frame ID
-        ts_ms: Date.now(),
-        hand_positions: handsData.reduce(
-          (acc, hand, index) => {
-            const handKey =
-              hand.handedness === "Left" ? "Right_hand" : "Left_hand"; // Mirroring for selfie camera if needed, or keep as is. usually camera flips.
+      const hasHand = result && result.hands && result.hands.length > 0;
+      const hasPose = result && result.pose && result.pose.landmarks;
 
-            const landmarksObj: Record<string, any> = {};
+      if (hasHand || hasPose) {
+        const handsData: DetectedHand[] = result.hands || [];
+        const poseData = result.pose || null;
 
-            // Map index to name based on MediaPipe Hands landmark indices
-            // 0: WRIST
-            // 1-4: THUMB
-            // 5-8: INDEX
-            // 9-12: MIDDLE
-            // 13-16: RING
-            // 17-20: PINKY
-            const LANDMARK_NAMES = [
-              "WRIST",
-              "THUMB_CMC",
-              "THUMB_MCP",
-              "THUMB_IP",
-              "THUMB_TIP",
-              "INDEX_FINGER_MCP",
-              "INDEX_FINGER_PIP",
-              "INDEX_FINGER_DIP",
-              "INDEX_FINGER_TIP",
-              "MIDDLE_FINGER_MCP",
-              "MIDDLE_FINGER_PIP",
-              "MIDDLE_FINGER_DIP",
-              "MIDDLE_FINGER_TIP",
-              "RING_FINGER_MCP",
-              "RING_FINGER_PIP",
-              "RING_FINGER_DIP",
-              "RING_FINGER_TIP",
-              "PINKY_MCP",
-              "PINKY_PIP",
-              "PINKY_DIP",
-              "PINKY_TIP",
-            ];
+        // Transform data to match json2socket.json structure
+        const transformedData: any = {
+          v: 1,
+          frame_id: frameCount + 1, // Simple incremental frame ID
+          ts_ms: Date.now(),
+          hand_positions: handsData.reduce(
+            (acc, hand, index) => {
+              const handKey =
+                hand.handedness === "Left" ? "Right_hand" : "Left_hand";
 
-            hand.landmarks.forEach((l, i) => {
-              if (i < LANDMARK_NAMES.length) {
-                const name = LANDMARK_NAMES[i];
-                landmarksObj[name] = {
-                  index: i,
-                  x: l.x,
-                  y: l.y,
-                  z: l.z,
-                  visibility: 1, // MediaPipe Hands usually implies visibility 1 if detected
-                };
-              }
-            });
+              const landmarksObj: Record<string, any> = {};
+              const LANDMARK_NAMES = [
+                "WRIST",
+                "THUMB_CMC",
+                "THUMB_MCP",
+                "THUMB_IP",
+                "THUMB_TIP",
+                "INDEX_FINGER_MCP",
+                "INDEX_FINGER_PIP",
+                "INDEX_FINGER_DIP",
+                "INDEX_FINGER_TIP",
+                "MIDDLE_FINGER_MCP",
+                "MIDDLE_FINGER_PIP",
+                "MIDDLE_FINGER_DIP",
+                "MIDDLE_FINGER_TIP",
+                "RING_FINGER_MCP",
+                "RING_FINGER_PIP",
+                "RING_FINGER_DIP",
+                "RING_FINGER_TIP",
+                "PINKY_MCP",
+                "PINKY_PIP",
+                "PINKY_DIP",
+                "PINKY_TIP",
+              ];
 
-            acc[handKey] = {
-              landmarks: landmarksObj,
-              handedness_score: hand.confidence,
-              hand_index: index,
-              // palm_size: calculatePalmSize(hand.landmarks) // Optional: implement if needed
-            };
-            return acc;
-          },
-          {} as Record<string, any>,
-        ),
-        // pose_positions: {} // Add pose logic here later if needed
-      };
+              hand.landmarks.forEach((l: any, i: number) => {
+                if (i < LANDMARK_NAMES.length) {
+                  const name = LANDMARK_NAMES[i];
+                  landmarksObj[name] = {
+                    index: i,
+                    x: l.x,
+                    y: l.y,
+                    z: l.z,
+                    visibility: 1,
+                  };
+                }
+              });
 
-      setDetectedHands(handsData);
-      setIsDetecting(true);
-    } else {
-      setDetectedHands([]);
-      setIsDetecting(false);
-    }
-  }, []);
+              acc[handKey] = {
+                landmarks: landmarksObj,
+                handedness_score: hand.confidence,
+                hand_index: index,
+              };
+              return acc;
+            },
+            {} as Record<string, any>,
+          ),
+          pose_positions: {},
+        };
+
+        // Add Pose Logic
+        if (poseData && poseData.landmarks) {
+          const POSE_NAMES_OF_INTEREST = [
+            "NOSE",
+            "LEFT_EYE",
+            "RIGHT_EYE",
+            "LEFT_EAR",
+            "RIGHT_EAR",
+            "LEFT_SHOULDER",
+            "RIGHT_SHOULDER",
+            "LEFT_ELBOW",
+            "RIGHT_ELBOW",
+            "LEFT_WRIST",
+            "RIGHT_WRIST",
+          ];
+
+          const poseObj: Record<string, any> = {};
+          poseData.landmarks.forEach((l: any) => {
+            if (POSE_NAMES_OF_INTEREST.includes(l.name)) {
+              poseObj[l.name] = {
+                index: l.index,
+                x: l.x,
+                y: l.y,
+                z: l.z,
+                visibility: l.visibility,
+              };
+            }
+          });
+          transformedData.pose_positions = poseObj;
+        }
+
+        setDetectedHands(handsData);
+        setDetectedPose(poseData);
+        setIsDetecting(true);
+      } else {
+        setDetectedHands([]);
+        setDetectedPose(null);
+        setIsDetecting(false);
+      }
+    },
+    [frameCount],
+  ); // Added frameCount to dep array just to suppress warning, or remove it from dep if causing performance issue. better to use functional update for frame count.
 
   const onHandsDetectedWorklet = useRunOnJS(onHandsDetected, [onHandsDetected]);
   const frameProcessor = useFrameProcessor(
@@ -237,11 +273,10 @@ export default function HandScreen() {
         style={[styles.landmarksOverlay, { height: cameraHeight }]}
         pointerEvents="none"
       >
+        {/* Render Hands */}
         {detectedHands.map((hand, handIndex) => (
-          <View key={handIndex} style={StyleSheet.absoluteFill}>
+          <View key={`hand-${handIndex}`} style={StyleSheet.absoluteFill}>
             {hand.landmarks?.map((l: any, i: number) => {
-              // Use 'l' directly if it has x,y,z (from our updated interface)
-              // The worklet returns raw objects, make sure to access properties safely
               const x = l.x ?? 0;
               const y = l.y ?? 0;
               const p = transformPoint(x, y);
@@ -261,6 +296,40 @@ export default function HandScreen() {
             })}
           </View>
         ))}
+
+        {/* Render Pose */}
+        {detectedPose && (
+          <View style={StyleSheet.absoluteFill}>
+            {detectedPose.landmarks?.map((l: any, i: number) => {
+              // Filter: Only show 0-16 and 23-32 (Upper body + Legs) or just specific ones
+              // Showing all for now, but making them distinct.
+              const x = l.x ?? 0;
+              const y = l.y ?? 0;
+              const p = transformPoint(x, y);
+
+              // Simple visibility check
+              if ((l.visibility ?? 1) < 0.5) return null;
+
+              return (
+                <View
+                  key={`pose-${i}`}
+                  style={[
+                    styles.landmark,
+                    {
+                      left: p.x - 4, // Slightly smaller
+                      top: p.y - 4,
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: "#FFFF00", // Yellow for pose
+                      borderColor: "rgba(0,0,0,0.5)",
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* Header */}

@@ -13,6 +13,7 @@ import UIKit
 public class HandLandmarkerFrameProcessor: FrameProcessorPlugin {
   
   private var handLandmarker: HandLandmarker?
+  private var poseLandmarker: PoseLandmarker?
   private var isInitialized = false
   
   // Cache for landmarks names to avoid recreation every frame
@@ -25,84 +26,117 @@ public class HandLandmarkerFrameProcessor: FrameProcessorPlugin {
     "PINKY_MCP", "PINKY_PIP", "PINKY_DIP", "PINKY_TIP"
   ]
 
+  // Pose landmarks (subset related to upper body mostly)
+  // MediaPipe Pose has 33 landmarks.
+  private let poseLandmarkNames = [
+    "NOSE", "LEFT_EYE_INNER", "LEFT_EYE", "LEFT_EYE_OUTER", "RIGHT_EYE_INNER", "RIGHT_EYE", "RIGHT_EYE_OUTER",
+    "LEFT_EAR", "RIGHT_EAR", "MOUTH_LEFT", "MOUTH_RIGHT",
+    "LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_ELBOW", "RIGHT_ELBOW", "LEFT_WRIST", "RIGHT_WRIST",
+    "LEFT_PINKY", "RIGHT_PINKY", "LEFT_INDEX", "RIGHT_INDEX", "LEFT_THUMB", "RIGHT_THUMB",
+    "LEFT_HIP", "RIGHT_HIP", "LEFT_KNEE", "RIGHT_KNEE", "LEFT_ANKLE", "RIGHT_ANKLE",
+    "LEFT_HEEL", "RIGHT_HEEL", "LEFT_FOOT_INDEX", "RIGHT_FOOT_INDEX"
+  ]
+
   public override init(proxy: VisionCameraProxyHolder, options: [AnyHashable : Any]! = [:]) {
     super.init(proxy: proxy, options: options)
-    initializeHandLandmarker()
+    initializeLandmarkers()
   }
 
-  private func initializeHandLandmarker() {
-    print("🚀 [Hand] Initializing HandLandmarker...")
-    // 1. Locate the model file in the bundle
-    guard let modelPath = Bundle.main.path(forResource: "hand_landmarker", ofType: "task") else {
-      print("❌ [Hand] Model file (hand_landmarker.task) not found in bundle! Make sure it is added to 'Copy Bundle Resources' in Xcode.")
-      return
+  private func initializeLandmarkers() {
+    print("🚀 [Vision] Initializing Landmarkers...")
+    
+    // --- 1. Hand Landmarker ---
+    if let modelPath = Bundle.main.path(forResource: "hand_landmarker", ofType: "task") {
+        print("📂 [Hand] Model path found: \(modelPath)")
+        do {
+            let baseOptions = BaseOptions()
+            baseOptions.modelAssetPath = modelPath
+            let options = HandLandmarkerOptions()
+            options.baseOptions = baseOptions
+            options.runningMode = .video
+            options.numHands = 2
+            options.minHandDetectionConfidence = 0.5
+            options.minHandPresenceConfidence = 0.5
+            options.minTrackingConfidence = 0.5
+            self.handLandmarker = try HandLandmarker(options: options)
+            print("✅ [Hand] Initialized Successfully")
+            self.isInitialized = true // At least one works
+        } catch {
+            print("❌ [Hand] Failed to initialize: \(error)")
+        }
+    } else {
+        print("❌ [Hand] Model file 'hand_landmarker.task' not found in bundle!")
+        // Debug bundle contents
+        // print("Ref - Bundle Resources: \(Bundle.main.paths(forResourcesOfType: "task", inDirectory: nil))")
     }
-    print("📂 [Hand] Model path found: \(modelPath)")
 
-    // 2. Configure MediaPipe Options
-    do {
-      let baseOptions = BaseOptions()
-      baseOptions.modelAssetPath = modelPath
-        
-      let options = HandLandmarkerOptions()
-      options.baseOptions = baseOptions
-      options.runningMode = .video
-      options.numHands = 2
-      options.minHandDetectionConfidence = 0.5
-      options.minHandPresenceConfidence = 0.5
-      options.minTrackingConfidence = 0.5
+    // --- 2. Pose Landmarker ---
+    // CHANGED: Try loading 'pose_landmarker_lite' OR 'pose_landmarker'
+    var posePath = Bundle.main.path(forResource: "pose_landmarker_lite", ofType: "task")
+    if posePath == nil {
+        posePath = Bundle.main.path(forResource: "pose_landmarker", ofType: "task")
+    }
 
-      print("🔧 [Hand] Options configured. Creating HandLandmarker...")
-      // 3. Create the HandLandmarker
-      self.handLandmarker = try HandLandmarker(options: options)
-      self.isInitialized = true
-      print("✅ [Hand] HandLandmarker initialized successfully (iOS)")
-    } catch {
-      print("❌ [Hand] Failed to initialize HandLandmarker: \(error)")
+    if let poseModelPath = posePath {
+        print("📂 [Pose] Model path found: \(poseModelPath)")
+        do {
+            let baseOptions = BaseOptions()
+            baseOptions.modelAssetPath = poseModelPath
+            let options = PoseLandmarkerOptions()
+            options.baseOptions = baseOptions
+            options.runningMode = .video
+            options.numPoses = 1
+            options.minPoseDetectionConfidence = 0.5
+            options.minPosePresenceConfidence = 0.5
+            options.minTrackingConfidence = 0.5
+            self.poseLandmarker = try PoseLandmarker(options: options)
+            print("✅ [Pose] Initialized Successfully")
+            self.isInitialized = true
+        } catch {
+            print("❌ [Pose] Failed to initialize: \(error)")
+        }
+    } else {
+         print("❌ [Pose] Model file (pose_landmarker.task or _lite) not found in bundle!")
     }
   }
 
   public override func callback(_ frame: Frame, withArguments arguments: [AnyHashable : Any]?) -> Any? {
-    // Return nil if not initialized to avoid crashes
-    guard isInitialized, let handLandmarker = handLandmarker else {
-      return nil
-    }
+    guard isInitialized else { return nil }
 
     let buffer = frame.buffer
-    // CMSampleBufferGetImageBuffer equivalent
-    guard let imageBuffer = CMSampleBufferGetImageBuffer(buffer) else {
-        return nil
-    }
+    guard let imageBuffer = CMSampleBufferGetImageBuffer(buffer) else { return nil }
       
     do {
-        // Timestamp in MS required by MediaPipe
         let timestampMs = Int(CMSampleBufferGetPresentationTimeStamp(buffer).seconds * 1000)
-        
-        // Create MPImage from the buffer.
-        // We use .up orientation to process the raw buffer as-is.
-        // Coordinate transformations (rotation/mirroring) are handled in JS.
         let mpImage = try MPImage(pixelBuffer: imageBuffer, orientation: .up)
         
-        // Run detection
-        let result = try handLandmarker.detect(videoFrame: mpImage, timestampInMilliseconds: timestampMs)
+        var resultData: [String: Any] = [:]
+
+        // --- Run Hand Detection ---
+        if let handLandmarker = self.handLandmarker {
+            let handResult = try handLandmarker.detect(videoFrame: mpImage, timestampInMilliseconds: timestampMs)
+            resultData["hands"] = convertHandResult(handResult)
+            resultData["handCount"] = handResult.landmarks.count
+        }
+
+        // --- Run Pose Detection ---
+        if let poseLandmarker = self.poseLandmarker {
+             let poseResult = try poseLandmarker.detect(videoFrame: mpImage, timestampInMilliseconds: timestampMs)
+             resultData["pose"] = convertPoseResult(poseResult)
+        }
         
-        // Convert to JS-friendly format
-        return convertResult(result)
+        return resultData
         
     } catch {
-        print("❌ [Hand] Detection error: \(error)")
+        print("❌ [Vision] Detection error: \(error)")
         return nil
     }
   }
 
-  private func convertResult(_ result: HandLandmarkerResult) -> [String: Any] {
+  private func convertHandResult(_ result: HandLandmarkerResult) -> [[String: Any]] {
     var handsData: [[String: Any]] = []
-
-    // Iterate through detected hands
     for (index, landmarks) in result.landmarks.enumerated() {
       var handData: [String: Any] = [:]
-
-      // Extract Handedness (Left/Right)
       if index < result.handedness.count {
         let categories = result.handedness[index]
         if let category = categories.first {
@@ -110,8 +144,6 @@ public class HandLandmarkerFrameProcessor: FrameProcessorPlugin {
             handData["confidence"] = category.score
         }
       }
-
-      // Extract Landmarks
       var landmarksArray: [[String: Any]] = []
       for (lmIndex, landmark) in landmarks.enumerated() {
         landmarksArray.append([
@@ -123,14 +155,29 @@ public class HandLandmarkerFrameProcessor: FrameProcessorPlugin {
         ])
       }
       handData["landmarks"] = landmarksArray
-      
       handsData.append(handData)
     }
+    return handsData
+  }
 
-    // Return the final structure expected by JS
-    return [
-      "hands": handsData,
-      "handCount": handsData.count
-    ]
+  private func convertPoseResult(_ result: PoseLandmarkerResult) -> [String: Any]? {
+      // We only care about the first detected pose usually
+      guard let landmarks = result.landmarks.first else { return nil }
+      
+      var landmarksArray: [[String: Any]] = []
+      for (lmIndex, landmark) in landmarks.enumerated() {
+          landmarksArray.append([
+            "index": lmIndex,
+            "name": lmIndex < poseLandmarkNames.count ? poseLandmarkNames[lmIndex] : "UNKNOWN",
+            "x": landmark.x,
+            "y": landmark.y,
+            "z": landmark.z,
+            "visibility": landmark.visibility ?? 0.0 // Pose landmarks have visibility score
+          ])
+      }
+      
+      return [
+        "landmarks": landmarksArray
+      ]
   }
 }

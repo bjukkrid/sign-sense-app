@@ -66,13 +66,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="pose"
-        options={{
-          title: "Pose",
-          tabBarIcon: ({ color }) => <TabBarIcon name="child" color={color} />,
-        }}
-      />
     </Tabs>
   );
 }
