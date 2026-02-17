@@ -60,8 +60,8 @@
 		13B07FAE1A68108700A75B9A /* signlangapp */ = {
 			isa = PBXGroup;
 			children = (
-				30DE35BA2F43436000E8BC33 /* pose_landmarker_lite.task */,
-				300E45EE2F4236E700715D1D /* HandLandmarkerFrameProcessor.swift */,
+				30C6DC992F44DE8600E16EB6 /* Resources */,
+				30C6DC972F44DE3E00E16EB6 /* FrameProcessors */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
 				13B07FB01A68108700A75B9A /* AppDelegate.mm */,
@@ -72,8 +72,6 @@
 				2D6121BA14F042488BD517C6 /* noop-file.swift */,
 				174E86B274944AB3B03E318D /* signlangapp-Bridging-Header.h */,
 				D67698D98C093E27C21FD903 /* PrivacyInfo.xcprivacy */,
-				305851822F420E9800CA1583 /* HandLandmarkerFrameProcessor.m */,
-				305851802F420BE400CA1583 /* hand_landmarker.task */,
 			);
 			name = signlangapp;
 			sourceTree = "<group>";
@@ -85,6 +83,40 @@
 				58EEBF8E8E6FB1BC6CAF49B5 /* libPods-signlangapp.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		30C6DC972F44DE3E00E16EB6 /* FrameProcessors */ = {
+			isa = PBXGroup;
+			children = (
+				30C6DC982F44DE6D00E16EB6 /* HandLandmarker */,
+			);
+			path = FrameProcessors;
+			sourceTree = "<group>";
+		};
+		30C6DC982F44DE6D00E16EB6 /* HandLandmarker */ = {
+			isa = PBXGroup;
+			children = (
+				305851822F420E9800CA1583 /* HandLandmarkerFrameProcessor.m */,
+				300E45EE2F4236E700715D1D /* HandLandmarkerFrameProcessor.swift */,
+			);
+			path = HandLandmarker;
+			sourceTree = "<group>";
+		};
+		30C6DC992F44DE8600E16EB6 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				30C6DC9A2F44DE9600E16EB6 /* Models */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		30C6DC9A2F44DE9600E16EB6 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				305851802F420BE400CA1583 /* hand_landmarker.task */,
+				30DE35BA2F43436000E8BC33 /* pose_landmarker_lite.task */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -486,10 +518,7 @@
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -544,10 +573,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
